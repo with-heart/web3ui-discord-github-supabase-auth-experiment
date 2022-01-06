@@ -1,3 +1,4 @@
+import {Text} from '@chakra-ui/react'
 import type {NextPage} from 'next'
 import Head from 'next/head'
 
@@ -13,7 +14,9 @@ const Home: NextPage = () => {
         <link rel="icon" href="/favicon.ico" />
       </Head>
 
-      <main>Hello world!</main>
+      <main>
+        <Text>Hello world!</Text>
+      </main>
     </div>
   )
 }
