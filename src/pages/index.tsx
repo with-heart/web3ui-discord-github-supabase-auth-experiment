@@ -1,8 +1,14 @@
-import {Text} from '@chakra-ui/react'
-import type {NextPage} from 'next'
+import {Button, Link, Text} from '@chakra-ui/react'
+import type {GetServerSideProps, NextPage} from 'next'
 import Head from 'next/head'
+import {parseUser} from '../lib/parse-github-user'
+import {UserData} from '../machines/github-auth'
 
-const Home: NextPage = () => {
+interface Props {
+  user?: UserData
+}
+
+const Home: NextPage<Props> = ({user}) => {
   return (
     <div>
       <Head>
@@ -15,10 +21,21 @@ const Home: NextPage = () => {
       </Head>
 
       <main>
-        <Text>Hello world!</Text>
+        {user ? (
+          <Text>Hello {user.email}!</Text>
+        ) : (
+          <Button as={Link} href="/api/auth/github">
+            Connect GitHub Account
+          </Button>
+        )}
       </main>
     </div>
   )
+}
+
+export const getServerSideProps: GetServerSideProps = async function (ctx) {
+  const user = parseUser(ctx)
+  return {props: {user}}
 }
 
 export default Home
