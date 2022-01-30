@@ -1,8 +1,9 @@
 import {serialize} from 'cookie'
 import {sign} from 'jsonwebtoken'
 import {NextApiRequest, NextApiResponse} from 'next'
-import {EventFrom} from 'xstate'
+import {assign, EventFrom} from 'xstate'
 import {createModel} from 'xstate/lib/model'
+import {ModelContextFrom, ModelEventsFrom} from 'xstate/lib/model.types'
 import {
   fetchGitHubAccessToken,
   fetchGitHubUser,
@@ -82,6 +83,11 @@ const {events} = githubAuthModel
 export const githubAuthMachine = githubAuthModel.createMachine(
   {
     id: 'github-auth',
+    tsTypes: {} as import('./github-auth.typegen').Typegen0,
+    schema: {
+      context: {} as ModelContextFrom<typeof githubAuthModel>,
+      events: {} as ModelEventsFrom<typeof githubAuthModel>,
+    },
     initial: 'idle',
     states: {
       idle: {
@@ -183,7 +189,6 @@ export const githubAuthMachine = githubAuthModel.createMachine(
   },
   {
     actions: {
-      // @ts-expect-error
       storeRequestResponse: githubAuthModel.assign(
         {
           request: (_context, event) => event.request,
@@ -192,7 +197,6 @@ export const githubAuthMachine = githubAuthModel.createMachine(
         },
         'initialize',
       ),
-      // @ts-expect-error
       storeToken: githubAuthModel.assign(
         {
           access_token: (_context, event) => {
@@ -204,32 +208,20 @@ export const githubAuthMachine = githubAuthModel.createMachine(
         },
         'tokenReceived',
       ),
-      // @ts-expect-error
-      storeUser: githubAuthModel.assign(
-        {
-          user: (_context, event) => event.user,
+      storeUser: assign({
+        user: (_context, event) => event.user as UserData,
+      }),
+      storePrimaryEmail: assign({
+        user: (context, event) => {
+          return {
+            ...context.user!,
+            email: event.email,
+          }
         },
-        'userReceived',
-      ),
-      // @ts-expect-error
-      storePrimaryEmail: githubAuthModel.assign(
-        {
-          user: (context, event) => {
-            return {
-              ...context.user!,
-              email: event.email,
-            }
-          },
-        },
-        'userPrimaryEmailReceived',
-      ),
-      // @ts-expect-error
-      signToken: githubAuthModel.assign(
-        {
-          token: (context) => sign(context.user!, 'JWT_SECRET'),
-        },
-        'tokenReceived',
-      ),
+      }),
+      signToken: assign({
+        token: (context) => sign(context.user!, 'JWT_SECRET'),
+      }),
     },
     services: {
       validateClient: (context) => (send) => {
