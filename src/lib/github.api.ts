@@ -1,4 +1,4 @@
-export interface GithubAuthorization {
+export interface GitHubAuthorization {
   accessToken: string
   tokenType: string
 }
@@ -25,7 +25,7 @@ export interface FetchGitHubAccessTokenResponse {
 export const fetchGitHubUser = async ({
   accessToken,
   tokenType,
-}: GithubAuthorization): Promise<FetchGitHubUserResponse> =>
+}: GitHubAuthorization): Promise<FetchGitHubUserResponse> =>
   (
     await fetch('https://api.github.com/user', {
       headers: {Authorization: `${tokenType} ${accessToken}`},
@@ -35,7 +35,7 @@ export const fetchGitHubUser = async ({
 export const fetchGitHubUserEmail = async ({
   accessToken,
   tokenType,
-}: GithubAuthorization) => {
+}: GitHubAuthorization) => {
   const emails: FetchGitHubUserEmailsResponse = await (
     await fetch('https://api.github.com/user/emails', {
       headers: {Authorization: `${tokenType} ${accessToken}`},

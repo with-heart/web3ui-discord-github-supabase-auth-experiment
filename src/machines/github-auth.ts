@@ -1,9 +1,7 @@
 import {serialize} from 'cookie'
 import {sign} from 'jsonwebtoken'
 import {NextApiRequest, NextApiResponse} from 'next'
-import {assign, EventFrom} from 'xstate'
-import {createModel} from 'xstate/lib/model'
-import {ModelContextFrom, ModelEventsFrom} from 'xstate/lib/model.types'
+import {assign, createMachine} from 'xstate'
 import {
   fetchGitHubAccessToken,
   fetchGitHubUser,
@@ -17,7 +15,7 @@ export interface UserData {
   avatar: string
 }
 
-interface ModelData {
+export interface GitHubAuthContext {
   /** GitHub client ID for OAuth app */
   client_id: string
   /** GitHub client secret for OAuth app */
@@ -44,49 +42,29 @@ interface ModelData {
   user?: UserData
 }
 
-export const githubAuthModel = createModel(
-  {
-    client_id: process.env.GITHUB_CLIENT_ID,
-    client_secret: process.env.GITHUB_CLIENT_SECRET,
-    scope: ['read:user', 'user:email'].join(' '),
-  } as ModelData,
-  {
-    events: {
-      initialize: (request: NextApiRequest, response: NextApiResponse) => ({
-        request,
-        response,
-      }),
-      methodInvalid: () => ({}),
-      codeMissing: () => ({}),
-      error: (error: string) => ({error}),
-      valid: () => ({}),
-      tokenReceived: (access_token: string, token_type: string) => ({
-        access_token,
-        token_type,
-      }),
-      tokenMissing: () => ({}),
-      userReceived: (user: UserData) => ({user}),
-      userEmailMissing: (user: FetchGitHubUserResponse) => ({user}),
-      userIdMissing: () => ({}),
-      userPrimaryEmailReceived: (email: string) => ({email}),
-      invalidClientId: () => ({error: `Invalid GitHub client ID provided`}),
-      invalidClientSecret: () => ({
-        error: `Invalid GitHub client secret provided`,
-      }),
-      done: () => ({}),
-    },
-  },
-)
+export type GitHubAuthEvent =
+  | {type: 'initialize'; request: NextApiRequest; response: NextApiResponse}
+  | {type: 'methodInvalid'}
+  | {type: 'codeMissing'}
+  | {type: 'error'; message: string}
+  | {type: 'valid'}
+  | {type: 'tokenReceived'; access_token: string; token_type: string}
+  | {type: 'tokenMissing'}
+  | {type: 'userReceived'; user: UserData}
+  | {type: 'userEmailMissing'; user: FetchGitHubUserResponse}
+  | {type: 'userIdMissing'}
+  | {type: 'userPrimaryEmailReceived'; email: string}
+  | {type: 'invalidClientId'; message: string}
+  | {type: 'invalidClientSecret'; message: string}
+  | {type: 'done'}
 
-const {events} = githubAuthModel
-
-export const githubAuthMachine = githubAuthModel.createMachine(
+export const githubAuthMachine = createMachine(
   {
     id: 'github-auth',
     tsTypes: {} as import('./github-auth.typegen').Typegen0,
     schema: {
-      context: {} as ModelContextFrom<typeof githubAuthModel>,
-      events: {} as ModelEventsFrom<typeof githubAuthModel>,
+      context: {} as GitHubAuthContext,
+      events: {} as GitHubAuthEvent,
     },
     initial: 'idle',
     states: {
@@ -189,25 +167,19 @@ export const githubAuthMachine = githubAuthModel.createMachine(
   },
   {
     actions: {
-      storeRequestResponse: githubAuthModel.assign(
-        {
-          request: (_context, event) => event.request,
-          response: (_context, event) => event.response,
-          code: (_context, event) => event.request.query.code as string,
+      storeRequestResponse: assign({
+        request: (_context, event) => event.request,
+        response: (_context, event) => event.response,
+        code: (_context, event) => event.request.query.code as string,
+      }),
+      storeToken: assign({
+        access_token: (_context, event) => {
+          return event.access_token
         },
-        'initialize',
-      ),
-      storeToken: githubAuthModel.assign(
-        {
-          access_token: (_context, event) => {
-            return event.access_token
-          },
-          token_type: (_context, event) => {
-            return event.token_type
-          },
+        token_type: (_context, event) => {
+          return event.token_type
         },
-        'tokenReceived',
-      ),
+      }),
       storeUser: assign({
         user: (_context, event) => event.user as UserData,
       }),
@@ -228,40 +200,47 @@ export const githubAuthMachine = githubAuthModel.createMachine(
         const {client_id, client_secret} = context
 
         if (!client_id) {
-          return send(events.invalidClientId())
+          return send({
+            type: 'invalidClientId',
+            message: 'Invalid GitHub client ID provided',
+          })
         }
 
         if (!client_secret) {
-          return send(events.invalidClientSecret())
+          return send({
+            type: 'invalidClientSecret',
+            message: 'Invalid GitHub client secret provided',
+          })
         }
 
-        return send(events.valid())
+        return send({type: 'valid'})
       },
       validateRequest: (context) => (send) => {
         const {request} = context
 
         // initial request and redirects should all be GET requests
         if (request.method !== 'GET') {
-          return send(events.methodInvalid())
+          return send({type: 'methodInvalid'})
         }
 
         const {code, error} = request.query
 
         // if we have an error, we'll bail
         if (error) {
-          return send(
-            events.error(Array.isArray(error) ? error.join(' ') : error),
-          )
+          return send({
+            type: 'error',
+            message: Array.isArray(error) ? error.join(' ') : error,
+          })
         }
 
         // if we don't have a code, it likely means this is the initial request,
         // so we'll bail so we can request one
         if (!code || typeof code !== 'string') {
-          return send(events.codeMissing())
+          return send({type: 'codeMissing'})
         }
 
         // request is good to go!
-        return send(events.valid())
+        return send({type: 'valid'})
       },
       requestAccessToken: (context) => async (send) => {
         const {request, client_id, client_secret} = context
@@ -278,12 +257,12 @@ export const githubAuthMachine = githubAuthModel.createMachine(
 
         // report if token wasn't received
         if (!access_token) {
-          return send(events.tokenMissing())
+          return send({type: 'tokenMissing'})
         }
 
         // send the tokenReceived event with our token stuff so we can store
         // it in context and re-use it later
-        return send(events.tokenReceived(access_token, token_type))
+        return send({type: 'tokenReceived', access_token, token_type})
       },
       fetchUser: (context) => async (send) => {
         const {access_token, token_type} = context
@@ -296,22 +275,23 @@ export const githubAuthMachine = githubAuthModel.createMachine(
 
         // report user missing an id
         if (!('id' in user)) {
-          return send(events.userIdMissing())
+          return send({type: 'userIdMissing'})
         }
 
         // report user missing an email
         if (!user.email) {
-          return send(events.userEmailMissing(user))
+          return send({type: 'userEmailMissing', user})
         }
 
         // report the user response
-        return send(
-          events.userReceived({
+        return send({
+          type: 'userReceived',
+          user: {
             id: user.id!,
             email: user.email,
             avatar: user.avatar_url,
-          }),
-        )
+          },
+        })
       },
       fetchPrimaryEmail: (context) => async (send) => {
         const {access_token, token_type} = context
@@ -322,7 +302,7 @@ export const githubAuthMachine = githubAuthModel.createMachine(
           tokenType: token_type!,
         })
 
-        return send(events.userPrimaryEmailReceived(primaryEmail))
+        return send({type: 'userPrimaryEmailReceived', email: primaryEmail})
       },
       setCookie: (context) => (send) => {
         // add our signed token to a cookie
@@ -335,15 +315,12 @@ export const githubAuthMachine = githubAuthModel.createMachine(
             path: '/',
           }),
         )
-        return send(events.done())
+        return send({type: 'done'})
       },
-      // @ts-expect-error
-      redirectToHome: (context) => {
+      redirectToHome: (context) => () => {
         context.response.redirect('/')
-        return
       },
-      // @ts-expect-error
-      redirectToAuthorize: (context) => {
+      redirectToAuthorize: (context) => () => {
         const {client_id, scope, response} = context
 
         const query = new URLSearchParams({
@@ -355,16 +332,9 @@ export const githubAuthMachine = githubAuthModel.createMachine(
         const uri = `https://github.com/login/oauth/authorize?${query}`
 
         response.redirect(uri)
-        return
       },
-      // @ts-expect-error
-      redirectToError: (context, _event) => {
-        // @ts-expect-error
-        const event: Extract<
-          EventFrom<typeof githubAuthModel>,
-          {type: 'error'}
-        > = _event
-        context.response.redirect(`/?error=${event.error}`)
+      redirectToError: (context, event) => () => {
+        context.response.redirect(`/?error=${event.message}`)
         return
       },
     },
