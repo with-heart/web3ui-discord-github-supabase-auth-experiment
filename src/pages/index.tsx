@@ -1,8 +1,7 @@
 import {Button, Link, Text} from '@chakra-ui/react'
 import type {GetServerSideProps, NextPage} from 'next'
 import Head from 'next/head'
-import {parseUser} from '../lib/parse-github-user'
-import {UserData} from '../machines/github-auth'
+import {parseUser, UserData} from '../github'
 
 interface Props {
   user?: UserData

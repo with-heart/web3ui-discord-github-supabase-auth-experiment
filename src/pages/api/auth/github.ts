@@ -1,6 +1,6 @@
 import {NextApiRequest, NextApiResponse} from 'next'
 import {interpret} from 'xstate'
-import {githubAuthMachine} from '../../../machines/github-auth'
+import {githubAuthMachine} from '../../../github'
 
 async function GitHubAuth(request: NextApiRequest, response: NextApiResponse) {
   return new Promise<void>((resolve) => {

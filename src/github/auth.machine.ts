@@ -7,7 +7,7 @@ import {
   fetchGitHubUser,
   fetchGitHubUserEmail,
   FetchGitHubUserResponse,
-} from '../lib/github.api'
+} from './api'
 
 export interface UserData {
   id: number
@@ -61,7 +61,7 @@ export type GitHubAuthEvent =
 export const githubAuthMachine = createMachine(
   {
     id: 'github-auth',
-    tsTypes: {} as import('./github-auth.typegen').Typegen0,
+    tsTypes: {} as import('./auth.machine.typegen').Typegen0,
     schema: {
       context: {} as GitHubAuthContext,
       events: {} as GitHubAuthEvent,
