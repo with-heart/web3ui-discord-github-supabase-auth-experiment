@@ -8,6 +8,7 @@ import {
   fetchGitHubUserEmail,
   FetchGitHubUserResponse,
 } from './api'
+import {GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET} from './secrets'
 
 export interface UserData {
   id: number
@@ -66,6 +67,11 @@ export const githubAuthMachine = createMachine(
       context: {} as GitHubAuthContext,
       events: {} as GitHubAuthEvent,
     },
+    context: {
+      client_id: GITHUB_CLIENT_ID,
+      client_secret: GITHUB_CLIENT_SECRET,
+      scope: ['read:user', 'user:email'].join(' '),
+    } as GitHubAuthContext,
     initial: 'idle',
     states: {
       idle: {
