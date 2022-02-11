@@ -8,7 +8,11 @@ import {
   fetchGitHubUserEmail,
   FetchGitHubUserResponse,
 } from './api'
-import {GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET} from './secrets'
+import {
+  GITHUB_CLIENT_ID,
+  GITHUB_CLIENT_SECRET,
+  GITHUB_JWT_SECRET,
+} from './secrets'
 
 export interface UserData {
   id: number
@@ -198,7 +202,7 @@ export const githubAuthMachine = createMachine(
         },
       }),
       signToken: assign({
-        token: (context) => sign(context.user!, 'JWT_SECRET'),
+        token: (context) => sign(context.user!, GITHUB_JWT_SECRET),
       }),
     },
     services: {
